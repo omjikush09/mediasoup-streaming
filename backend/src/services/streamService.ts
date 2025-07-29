@@ -44,7 +44,7 @@ export class StreamService {
 		this.restartTimeout = setTimeout(async () => {
 			await this.startHLSStream();
 			this.restartTimeout = null;
-		}, 2000);
+		}, 15000);
 	}
 
 	async startHLSStream() {
@@ -92,7 +92,7 @@ export class StreamService {
 		this.restartTimeout = setTimeout(async () => {
 			await this.startHLSStream();
 			this.restartTimeout = null;
-		}, 2000);
+		}, 15000);
 	}
 	static filterParticipaint(socketId: string) {
 		StreamService.participaint = StreamService.participaint.filter((value) => {
