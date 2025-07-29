@@ -8,16 +8,7 @@ interface CameraStreamProps {
 }
 
 const CameraStream: React.FC<CameraStreamProps> = ({ sendTransport }) => {
-	const {
-		localStream,
-		isAudioEnabled,
-		isVideoEnabled,
-		startMedia,
-		stopMedia,
-		toggleAudio,
-		toggleVideo,
-	} = useLocalMedia(sendTransport);
-	// const [mutetVideo,setMuted]
+	const { localStream, startMedia, stopMedia } = useLocalMedia(sendTransport);
 	let localVideoStream: MediaStream;
 	if (localStream) {
 		localVideoStream = new MediaStream();
@@ -49,13 +40,6 @@ const CameraStream: React.FC<CameraStreamProps> = ({ sendTransport }) => {
 					<Button onClick={() => startMedia()}>Start Camera</Button>
 				)}
 				{!!localStream && <Button onClick={stopMedia}>Stop Camera</Button>}
-				{/* <button
-					onClick={toggleAudio}
-					disabled={!localStream}
-					className={isAudioEnabled ? "enabled" : "disabled"}
-				>
-					{isAudioEnabled ? "Mute" : "Unmute"}
-				</button> */}
 			</div>
 		</div>
 	);

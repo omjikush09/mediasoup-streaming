@@ -1,5 +1,5 @@
 "use client";
-//
+
 import VideoPlayer from "../components/VideoPlayer";
 const Watch = () => {
 	return (
