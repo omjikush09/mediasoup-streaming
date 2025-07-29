@@ -16,13 +16,21 @@ const Home: React.FC = () => {
 		initialize,
 	} = useMediasoup(SERVER_URL);
 
-	const { remoteStreams, getOtherStreams } = useRemoteStreams({
+	const { remoteStreams, getAllStreams } = useRemoteStreams({
 		recvTransport,
 	});
 
 	useEffect(() => {
 		initialize();
 	}, [initialize]);
+
+	useEffect(() => {
+		if (isConnected) {
+			setTimeout(() => {
+				getAllStreams();
+			}, 1000);
+		}
+	}, [isConnected]);
 
 	if (error) {
 		return (
@@ -53,19 +61,19 @@ const Home: React.FC = () => {
 	}
 
 	return (
-		<div className="app-container">
-			<h1>Mediasoup Video Chat</h1>
+		<div className="h-dvh w-dvw bg-gray-400 relative">
+			<h1 className="text-center text-black ">Mediasoup Video Chat</h1>
 			{recvTransport?.connectionState + " conection state"}
-			<div className="video-layout  ">
-				<div className="local-section">
-					<h2>Your Camera</h2>
+			<div className="video-layout  w-full  flex  flex-row mt-10 justify-evenly  ">
+				<div className="local-section  gap-5 flex flex-col ">
+					<h2 className="text-center text-black">Your Camera</h2>
 					<CameraStream sendTransport={sendTransport} />
 				</div>
 
-				<div className="remote-section">
+				<div className="remote-section gap-5 flex flex-col justify-start">
+					<h2 className="text-black text-center ">Remote Streams</h2>
 					<RemoteVideoGrid remoteStreams={remoteStreams} />
 				</div>
-				<button onClick={getOtherStreams}>GET OTHER Strem</button>
 			</div>
 		</div>
 	);

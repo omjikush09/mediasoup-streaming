@@ -8,7 +8,7 @@ interface UseRemoteStreamsReturn {
 	remoteStreams: RemoteStreamData[];
 	subscribeToProducer: (producerId: string) => Promise<void>;
 	removeStream: (consumerId: string) => void;
-	getOtherStreams: () => void;
+	getAllStreams: () => void;
 }
 
 export const useRemoteStreams = ({
@@ -22,7 +22,7 @@ export const useRemoteStreams = ({
 		async (producerId: string): Promise<void> => {
 			try {
 				const consumer = await mediasoupService.consume(producerId);
-				
+
 				const streamData: RemoteStreamData = {
 					id: consumer.id,
 					producerId,
@@ -86,6 +86,6 @@ export const useRemoteStreams = ({
 		remoteStreams,
 		subscribeToProducer,
 		removeStream,
-		getOtherStreams,
+		getAllStreams: getOtherStreams,
 	};
 };

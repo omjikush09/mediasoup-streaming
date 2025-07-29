@@ -1,6 +1,7 @@
 import React from "react";
 import * as mediasoupClient from "mediasoup-client";
 import { useLocalMedia } from "../../hooks/useLocalMedia";
+import { Button } from "@/components/ui/button";
 
 interface CameraStreamProps {
 	sendTransport: mediasoupClient.types.Transport | null;
@@ -23,14 +24,13 @@ const CameraStream: React.FC<CameraStreamProps> = ({ sendTransport }) => {
 		localVideoStream.addTrack(localStream.getVideoTracks()[0]);
 	}
 	return (
-		<div className="camera-stream">
+		<div className="flex flex-col gap-4">
 			<div className="local-video-container">
 				{localStream ? (
 					<video
 						autoPlay
-						// muted
 						playsInline
-						className="local-video"
+						className="h-[300] w-[500]"
 						ref={(video) => {
 							if (video && localStream) {
 								video.srcObject = localVideoStream;
@@ -38,31 +38,24 @@ const CameraStream: React.FC<CameraStreamProps> = ({ sendTransport }) => {
 						}}
 					/>
 				) : (
-					<div className="no-video">Camera not started</div>
+					<div className="h-[300] w-[500] bg-violet-600 ">
+						Camera not started
+					</div>
 				)}
 			</div>
 
-			<div className="media-controls">
-				<button onClick={() => startMedia()} disabled={!!localStream}>
-					Start Camera
-				</button>
-				<button onClick={stopMedia} disabled={!localStream}>
-					Stop Camera
-				</button>
-				<button
+			<div className="media-controls text-center ">
+				{!localStream && (
+					<Button onClick={() => startMedia()}>Start Camera</Button>
+				)}
+				{!!localStream && <Button onClick={stopMedia}>Stop Camera</Button>}
+				{/* <button
 					onClick={toggleAudio}
 					disabled={!localStream}
 					className={isAudioEnabled ? "enabled" : "disabled"}
 				>
 					{isAudioEnabled ? "Mute" : "Unmute"}
-				</button>
-				<button
-					onClick={toggleVideo}
-					disabled={!localStream}
-					className={isVideoEnabled ? "enabled" : "disabled"}
-				>
-					{isVideoEnabled ? "Hide Video" : "Show Video"}
-				</button>
+				</button> */}
 			</div>
 		</div>
 	);

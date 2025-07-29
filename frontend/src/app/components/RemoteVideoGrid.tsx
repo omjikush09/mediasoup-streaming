@@ -31,9 +31,10 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 
 				console.log(track.kind);
 				if (
-					track.kind === "video" || track.kind === "audio" &&
-					track.enabled &&
-					track.readyState === "live"
+					track.kind === "video" ||
+					(track.kind === "audio" &&
+						track.enabled &&
+						track.readyState === "live")
 				) {
 					console.log("track");
 					mediaStream.addTrack(track);
@@ -59,23 +60,22 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 	}, [stream]);
 
 	if (!remoteStreams || remoteStreams.length < 2) {
-		return <p>No remote video streams available</p>;
+		return (
+			<div className="h-[300] w-[500] bg-black">
+				<p>No remote video streams available</p>;
+			</div>
+		);
 	}
 
 	return (
-		<div className="remote-video-grid ">
-			<h2>Remote Streams ({remoteStreams.length})</h2>
-			<div className="video-grid">
-				d
-				<video
-					autoPlay
-					playsInline
-					ref={videoRef}
-					className="remote-video"
-					// only if needed
-				/>
-			</div>
-		</div>
+		<video
+			autoPlay
+			playsInline
+			className="h-[300] w-[500]"
+			ref={videoRef}
+			controls
+			// only if needed
+		/>
 	);
 };
 

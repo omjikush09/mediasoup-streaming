@@ -281,7 +281,7 @@ export class MultiStreamHLSMixer {
 			});
 
 			if (videoInputs.length === 0 && audioInputs.length === 0) {
-				throw new Error("No valid inputs available for FFmpeg");
+				return;
 			}
 
 			// Build filters
