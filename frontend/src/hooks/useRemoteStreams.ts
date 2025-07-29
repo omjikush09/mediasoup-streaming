@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { mediasoupService } from "../services/mediasoupClient";
 import { types as mediasoupTypes } from "mediasoup-client";
 import { RemoteStreamData, ProducerInfo } from "../types/mediasoupe";
-import { socket, socketEmit } from "@/util/socket";
+import { getSocket, socketEmit } from "@/util/socket";
+
+const socket = getSocket();
 
 interface UseRemoteStreamsReturn {
 	remoteStreams: RemoteStreamData[];

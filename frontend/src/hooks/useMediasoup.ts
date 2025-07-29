@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import * as mediasoupClient from "mediasoup-client";
 import { mediasoupService } from "../services/mediasoupClient"; // Updated import
 import { WebRTCTransportData } from "../types/mediasoupe";
-import { socket, socketEmit } from "@/util/socket";
+import { getSocket, socketEmit } from "@/util/socket";
 
+const socket = getSocket();
 interface UseMediasoupReturn {
 	isConnected: boolean;
 	isInitializing: boolean;
@@ -30,15 +31,12 @@ export const useMediasoup = (serverUrl: string): UseMediasoupReturn => {
 		setError(null);
 
 		try {
-			// Connect socket
-			socket.connect();
-
 			// Get router RTP capabilities
 			const rtpCapabilities =
 				await socketEmit<mediasoupClient.types.RtpCapabilities>(
 					"getRouterRTPCapabilities"
 				);
-			console.log(rtpCapabilities +" Router ");
+			console.log(rtpCapabilities + " Router ");
 			// Initialize mediasoup device
 			await mediasoupService.initialize(rtpCapabilities); // Updated reference
 

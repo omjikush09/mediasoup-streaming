@@ -1,6 +1,17 @@
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
+import { SERVER_URL } from "./config";
 
-export const socket = io("ws://localhost:8000");
+let socket: Socket | null = null;
+
+export const getSocket = (): Socket => {
+	if (!socket) {
+		socket = io(SERVER_URL, {
+			transports: ["websocket"],
+			withCredentials: true,
+		});
+	}
+	return socket;
+};
 
 export const socketEmit = <T = any>(
 	event: string,
@@ -8,6 +19,7 @@ export const socketEmit = <T = any>(
 	callback?: Function
 ): Promise<T> => {
 	console.log("Emitting event:", event, "with data:", data);
+	let socket = getSocket();
 	if (data != undefined) {
 		return new Promise((resolve, reject) => {
 			socket.emit(event, data, (response: any) => {

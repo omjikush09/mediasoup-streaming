@@ -1,7 +1,7 @@
 "use client";
 import { useRef } from "react";
 import ReactHlsPlayer from "react-hls-player";
-import { SERVER_URL } from "../../../config";
+import { SERVER_URL } from "../../util/config";
 const VideoPlayer = () => {
 	const streamUrl = SERVER_URL + "/hls/playlist.m3u8";
 

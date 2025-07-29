@@ -4,7 +4,7 @@ import CameraStream from "../components/Camera";
 import RemoteVideoGrid from "../components/RemoteVideoGrid";
 import { useMediasoup } from "../../hooks/useMediasoup";
 import { useRemoteStreams } from "../../hooks/useRemoteStreams";
-import { SERVER_URL } from "../../../config";
+import { SERVER_URL } from "../../util/config";
 
 const Home: React.FC = () => {
 	const {
