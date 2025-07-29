@@ -6,6 +6,7 @@ import { ChildProcess, exec, execSync, spawn, spawnSync } from "child_process";
 import logger from "../utlis/logger";
 import * as net from "net";
 import { promisify } from "util";
+import { fileExistsAsync } from "../utlis/fileSystem";
 
 const execAsync = promisify(exec);
 
@@ -319,13 +320,14 @@ export class MultiStreamHLSMixer {
 			ffmpegArgs.push("-filter_complex", filterComplex);
 			ffmpegArgs.push(...maps);
 
-			const playlistExists = fs.existsSync(playlistPath);
+			const playlistExists = await fileExistsAsync(playlistPath);
 
 			const hlsFlags = playlistExists
 				? "delete_segments+independent_segments+omit_endlist+append_list+round_durations+discont_start"
 				: "delete_segments+independent_segments+omit_endlist+round_durations+discont_start";
 
-			let hls_start_number = this.getLastSegmentNumber(playlistPath) + 1;
+			let hls_start_number =
+				(await this.getLastSegmentNumber(playlistPath)) + 1;
 			logger.info(playlistExists);
 			logger.info(hls_start_number);
 			// Add encoding and output parameters
@@ -890,10 +892,10 @@ export class MultiStreamHLSMixer {
 		return `${inputMaps}amix=inputs=${audioInputs.length}:duration=longest[mixed_audio]`;
 	}
 
-	ensureDirectoryExists() {
-		if (!fs.existsSync(this.outputPath)) {
+	async ensureDirectoryExists() {
+		if (!(await fileExistsAsync(this.outputPath))) {
 			logger.info("Creating HLS output folder");
-			fs.mkdirSync(this.outputPath, { recursive: true });
+			await fs.promises.mkdir(this.outputPath, { recursive: true });
 		}
 	}
 
@@ -1004,12 +1006,12 @@ export class MultiStreamHLSMixer {
 
 		// Clean up SDP files and segments
 		try {
-			if (fs.existsSync(this.outputPath)) {
-				const files = fs.readdirSync(this.outputPath);
-				files.forEach((file) => {
+			if (await fileExistsAsync(this.outputPath)) {
+				const files = await fs.promises.readdir(this.outputPath);
+				files.forEach(async (file) => {
 					if (file.endsWith(".sdp")) {
 						try {
-							fs.unlinkSync(path.join(this.outputPath, file));
+							await fs.promises.unlink(path.join(this.outputPath, file));
 						} catch (error) {
 							logger.warn(`Failed to delete file ${file}:`, error);
 						}
@@ -1035,7 +1037,6 @@ export class MultiStreamHLSMixer {
 
 	async removeParticipaint(socketId: string) {
 		if (this.participantInfo.has(socketId)) {
-			await this.cleanup();
 			const data = this.participantInfo.get(socketId);
 			try {
 				if (data?.consumers.audio && !data.consumers.audio.closed) {
@@ -1062,11 +1063,14 @@ export class MultiStreamHLSMixer {
 				}
 
 				// Clean up SDP files
-				if (data?.videosSdpPath && fs.existsSync(data.videosSdpPath)) {
-					fs.unlinkSync(data.videosSdpPath);
+				if (
+					data?.videosSdpPath &&
+					(await fileExistsAsync(data.videosSdpPath))
+				) {
+					await fs.promises.unlink(data.videosSdpPath);
 				}
-				if (data?.audioSdpPath && fs.existsSync(data.audioSdpPath)) {
-					fs.unlinkSync(data.audioSdpPath);
+				if (data?.audioSdpPath && (await fileExistsAsync(data.audioSdpPath))) {
+					await fs.promises.unlink(data.audioSdpPath);
 				}
 			} catch (error) {
 				logger.error(`Error removing participant ${socketId}:`, error);
@@ -1075,12 +1079,12 @@ export class MultiStreamHLSMixer {
 			logger.info(`Participant ${socketId} removed`);
 		}
 	}
-	getLastSegmentNumber(playlistPath: string) {
+	async getLastSegmentNumber(playlistPath: string) {
 		try {
-			const output = execSync(
+			const { stdout } = await execAsync(
 				`grep -o 'segment_[0-9]*\\.ts' ${playlistPath} | sed 's/[^0-9]//g' | tail -1`
 			);
-			const lastSegment = parseInt(output.toString().trim(), 10);
+			const lastSegment = parseInt(stdout.toString().trim(), 10);
 			return isNaN(lastSegment) ? 0 : lastSegment;
 		} catch (err: any) {
 			logger.error("Error reading playlist:", err.message);

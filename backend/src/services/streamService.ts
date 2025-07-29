@@ -84,10 +84,10 @@ export class StreamService {
 	async removeParticipaint(socketId: string) {
 		if (!StreamService.participaint.includes(socketId)) return;
 		StreamService.filterParticipaint(socketId);
-		await this.HLSMixer?.removeParticipaint(socketId);
 		if (this.restartTimeout) {
 			clearTimeout(this.restartTimeout);
 		}
+		await this.HLSMixer?.removeParticipaint(socketId);
 
 		this.restartTimeout = setTimeout(async () => {
 			await this.startHLSStream();
