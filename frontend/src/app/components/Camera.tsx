@@ -44,7 +44,7 @@ const CameraStream: React.FC<CameraStreamProps> = ({ sendTransport }) => {
 				)}
 			</div>
 
-			<div className="media-controls text-center ">
+			<div className="  text-center ">
 				{!localStream && (
 					<Button onClick={() => startMedia()}>Start Camera</Button>
 				)}

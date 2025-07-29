@@ -61,16 +61,15 @@ const Home: React.FC = () => {
 	}
 
 	return (
-		<div className="h-dvh w-dvw bg-gray-400 relative">
+		<div className=" w-screen min-h-dvh h-auto bg-gray-400 flex flex-col">
 			<h1 className="text-center text-black ">Mediasoup Video Chat</h1>
-			{recvTransport?.connectionState + " conection state"}
-			<div className="video-layout  w-full  flex  flex-row mt-10 justify-evenly  ">
-				<div className="local-section  gap-5 flex flex-col ">
+			<div className="video-layout  flex-1   flex  lg:flex-row lg:mt-10 lg:justify-evenly flex-col items-center  lg:items-start pb-10">
+				<div className=" gap-5 flex flex-col ">
 					<h2 className="text-center text-black">Your Camera</h2>
 					<CameraStream sendTransport={sendTransport} />
 				</div>
 
-				<div className="remote-section gap-5 flex flex-col justify-start">
+				<div className=" gap-5 flex flex-col  ">
 					<h2 className="text-black text-center ">Remote Streams</h2>
 					<RemoteVideoGrid remoteStreams={remoteStreams} />
 				</div>
