@@ -1,22 +1,17 @@
-import { types as mediaSoupTypes } from "mediasoup";
+import { types as mediasoupTypes } from "mediasoup";
 import { Peer } from "../lib/peer";
-import { MultiStreamHLSMixer, participant } from "./multiStreamHLSMixer";
-import { config } from "../config/mediasoup";
+import { MultiStreamHLSMixer } from "./multiStreamHLSMixer";
 import logger from "../utlis/logger";
 
-interface StreamServiceInterface {
-	router: mediaSoupTypes.Router;
-	peers: Map<string, Peer>;
-}
-
 export class StreamService {
-	router: mediaSoupTypes.Router;
+	router: mediasoupTypes.Router;
 	peers: Map<string, Peer>;
-	static participaint: string[] = [];
+	static participaintsMap = new Map<string, participantInfo>();
 	HLSMixer: MultiStreamHLSMixer | null;
 	private restartTimeout: NodeJS.Timeout | null = null;
-	private isRestarting = false;
-	transport: mediaSoupTypes.PlainTransport | null;
+	static HLSStreamStartCounter = 0;
+	transport: mediasoupTypes.PlainTransport | null;
+
 	constructor({ router, peers }: StreamServiceInterface) {
 		this.router = router;
 		this.peers = peers;
@@ -36,81 +31,103 @@ export class StreamService {
 		if (!data) return;
 		// Make sure both audio and video is coming
 		if (Array.from(data?.getProducers()).length < 1) return;
-		StreamService.participaint.push(socketId);
+		let audioProducer: mediasoupTypes.Producer;
+		let videoProducer: mediasoupTypes.Producer;
+		for (let p of data?.getProducers()!) {
+			if (p.kind == "audio") {
+				audioProducer = p;
+			} else {
+				videoProducer = p;
+			}
+		}
+		// Adding Prticipaint
+		StreamService.participaintsMap.set(socketId, {
+			id: socketId,
+			consumers: {},
+			ips: {},
+			ports: {},
+			transports: {},
+			producers: {
+				audioProducer: audioProducer!,
+				videoProducer: videoProducer!,
+			},
+		});
 		if (this.restartTimeout) {
 			clearTimeout(this.restartTimeout);
 		}
-
+		StreamService.HLSStreamStartCounter++;
 		this.restartTimeout = setTimeout(async () => {
-			await this.startHLSStream();
+			await this.startHLSStream(StreamService.HLSStreamStartCounter);
 			this.restartTimeout = null;
-		}, 15000);
-	}
-
-	async startHLSStream() {
-		logger.info("Participaint info");
-		logger.info(StreamService.participaint.length);
-		await this.killFFmegProcss();
-
-		const len = StreamService.participaint.length;
-		if (len == 0) {
-			return;
-		}
-		// Generating all participaints again with new layout
-		const participantsWithLayout: participant[] =
-			StreamService.participaint.map((id, index) => {
-				const data = this.peers.get(id);
-
-				let info: participant = {
-					socketId: id,
-					producers: {},
-					position: this.getLayoutOfCurrentStream({
-						numberOfParticipaint: len,
-						index,
-					}),
-				};
-				for (let p of data?.getProducers()!) {
-					if (p.kind == "audio") {
-						info.producers.audioProducer = p;
-					} else {
-						info.producers.videoProducer = p;
-					}
-				}
-				return info;
-			});
-		await this.HLSMixer?.generateFFmpegHLSStream(participantsWithLayout);
+		}, 5000);
 	}
 
 	async removeParticipaint(socketId: string) {
-		if (!StreamService.participaint.includes(socketId)) return;
-		StreamService.filterParticipaint(socketId);
+		if (!StreamService.participaintsMap.has(socketId)) {
+			logger.warn("While removing participaint socketId not found");
+			return;
+		} else if (
+			!StreamService.participaintsMap.get(socketId)?.producers.audioProducer
+				.closed ||
+			!StreamService.participaintsMap.get(socketId)?.producers.videoProducer
+				.closed
+		) {
+			return;
+		}
+
 		if (this.restartTimeout) {
 			clearTimeout(this.restartTimeout);
 		}
+		StreamService.HLSStreamStartCounter++;
 		await this.HLSMixer?.removeParticipaint(socketId);
 
 		this.restartTimeout = setTimeout(async () => {
-			await this.startHLSStream();
+			await this.startHLSStream(StreamService.HLSStreamStartCounter);
 			this.restartTimeout = null;
-		}, 15000);
-	}
-	static filterParticipaint(socketId: string) {
-		StreamService.participaint = StreamService.participaint.filter((value) => {
-			return socketId != value;
-		});
-		logger.info("Filtering Partiipant");
-		logger.info(StreamService.participaint);
+		}, 5000);
 	}
 
-	async killFFmegProcss() {
+	private async startHLSStream(startCounter: number) {
+		logger.info("Participaint info start, about to add layout");
+		logger.info("Paritipaint Map", [
+			...StreamService.participaintsMap.entries(),
+		]);
+		await this.killFFmegProcss();
+
+		const len = StreamService.participaintsMap.size;
+		if (len == 0) {
+			return;
+		}
+		let index = 0;
+		// Generating all participaints again with new layout
+		StreamService.participaintsMap.forEach((value) => {
+			value.layout = this.getLayoutOfCurrentStream({
+				numberOfParticipaint: len,
+				index,
+			});
+			index++;
+		});
+		// Checking if new process start request already come
+		if (StreamService.HLSStreamStartCounter > startCounter) return;
+		await this.HLSMixer?.generateFFmpegHLSStream(
+			StreamService.participaintsMap,
+			startCounter
+		);
+	}
+
+	private async killFFmegProcss() {
 		if (this.HLSMixer?.ffmpegProcess) {
 			logger.info("Closing the FFmpeg Server");
-			this.HLSMixer.cleanup();
-			await new Promise((resolve) => setTimeout(resolve, 3000));
+			this.HLSMixer.stopFFmpeg();
+			await new Promise((resolve) => setTimeout(resolve, 10000));
 		}
 	}
+	// Close all transport and stream
+	async cleanup() {
+		await this.HLSMixer?.cleanup();
+	}
 
-	getLayoutOfCurrentStream({
+	private getLayoutOfCurrentStream({
 		numberOfParticipaint,
 		index,
 	}: {
@@ -133,4 +150,41 @@ export class StreamService {
 			height: cellHeight,
 		};
 	}
+}
+
+interface StreamServiceInterface {
+	router: mediasoupTypes.Router;
+	peers: Map<string, Peer>;
+}
+
+export interface participantInfo {
+	id: string;
+	layout?: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	};
+	consumers: {
+		video?: mediasoupTypes.Consumer;
+		audio?: mediasoupTypes.Consumer;
+	};
+	transports: {
+		video?: mediasoupTypes.PlainTransport;
+		audio?: mediasoupTypes.PlainTransport;
+	};
+	producers: {
+		audioProducer: mediasoupTypes.Producer;
+		videoProducer: mediasoupTypes.Producer;
+	};
+	videosSdpPath?: string;
+	audioSdpPath?: string;
+	ports: {
+		video?: number;
+		audio?: number;
+	};
+	ips: {
+		video?: string;
+		audio?: string;
+	};
 }

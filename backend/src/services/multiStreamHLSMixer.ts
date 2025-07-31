@@ -1,92 +1,55 @@
 import { types as mediaSoupTypes } from "mediasoup";
-import { config } from "../config/mediasoup";
 import path from "path";
 import * as fs from "fs";
-import { ChildProcess, exec, execSync, spawn, spawnSync } from "child_process";
+import { ChildProcess, exec, spawn } from "child_process";
 import logger from "../utlis/logger";
-import * as net from "net";
-import { promisify } from "util";
+import { promisify } from "node:util";
 import { fileExistsAsync } from "../utlis/fileSystem";
+import { PortManager } from "./PortManager";
+import { participantInfo, StreamService } from "./streamService";
+import { SDPService } from "./SDPService";
+import { config } from "../config/mediasoup";
 
 const execAsync = promisify(exec);
 
-export interface participant {
-	socketId: string;
-	producers: {
-		audioProducer?: mediaSoupTypes.Producer;
-		videoProducer?: mediaSoupTypes.Producer;
-	};
-	position: {
-		x: number;
-		y: number;
-		width: number;
-		height: number;
-	};
-}
-
-type videoInput = {
+export type videoInput = {
 	index: number;
 	participantId: string;
 	layout: participantInfo["layout"];
 };
 
-type audioInput = {
+export type audioInput = {
 	index: number;
 	participantId: string;
 };
 
-interface participantInfo {
-	id: string;
-	layout: participant["position"];
-	consumers: {
-		video?: mediaSoupTypes.Consumer;
-		audio?: mediaSoupTypes.Consumer;
-	};
-	transports: {
-		video?: mediaSoupTypes.PlainTransport;
-		audio?: mediaSoupTypes.PlainTransport;
-	};
-	videosSdpPath?: string;
-	audioSdpPath?: string;
-	ports: {
-		video?: number;
-		audio?: number;
-	};
-	ips: {
-		video?: string;
-		audio?: string;
-	};
-}
-
-interface PortAllocation {
-	video?: number;
-	audio?: number;
-}
-
 export class MultiStreamHLSMixer {
 	router: mediaSoupTypes.Router;
-	participantInfo = new Map<string, participantInfo>();
+	// participantInfo = new Map<string, participantInfo>();
 	segmentDuration = 4;
 	playlistSize = 10;
 	outputPath: string;
 	videoMixConfig;
 	ffmpegProcess: ChildProcess | null;
-	usedPorts = new Set<number>();
 	isRestarting = false;
 	processMonitorInterval: NodeJS.Timeout | null = null;
+	numberOFparticipantAtStart = 0;
 
+	SDPService: SDPService;
 	constructor(router: mediaSoupTypes.Router) {
 		this.router = router;
-		this.outputPath = "./hls_output";
+		this.outputPath = config.outputPath;
 		this.videoMixConfig = {
 			width: 1920,
 			height: 1080,
 			fps: 30,
 			bitrate: "2000k",
 		};
+
 		this.ffmpegProcess = null;
 		this.ensureDirectoryExists();
 		this.startProcessMonitoring();
+		this.SDPService = new SDPService(router);
 	}
 
 	private startProcessMonitoring() {
@@ -116,97 +79,27 @@ export class MultiStreamHLSMixer {
 		}
 	}
 
-	async generateFFmpegHLSStream(participants: participant[]) {
+	async generateFFmpegHLSStream(
+		participants: Map<string, participantInfo>,
+		startCounter: number
+	) {
 		try {
 			// Prevent multiple simultaneous restarts
+
 			if (this.isRestarting) {
 				logger.warn("FFmpeg restart already in progress, skipping...");
 				return;
 			}
 
-			this.isRestarting = true;
-
-			logger.info("Starting HLS stream generation", {
-				participantCount: participants.length,
-				participants: participants.map((p) => ({
-					id: p.socketId,
-					hasVideo: !!p.producers.videoProducer,
-					hasAudio: !!p.producers.audioProducer,
-				})),
-			});
-
+			await this.SDPService.generateSDP();
+			if (StreamService.HLSStreamStartCounter > startCounter) return;
 			const playlistPath = path.join(this.outputPath, "playlist.m3u8");
 			const segmentPath = path.join(this.outputPath, "segment_%03d.ts");
 
-			// Ensure complete cleanup before starting
-			// There could be situation where PORTs are about to get relates
-			// THEN: Wait longer for ports to be fully released
 			logger.info("Waiting for ports to be fully released...");
-			await new Promise((resolve) => setTimeout(resolve, 8000)); // Increased to 8 seconds
-
-			const portAllocations = new Map<string, PortAllocation>();
+			// await new Promise((resolve) => setTimeout(resolve, 8000)); // Increased to 8 seconds
 
 			logger.info("Pre-allocating ports for all participants...");
-			for (const participant of participants) {
-				const allocation: PortAllocation = {};
-
-				if (participant.producers.videoProducer) {
-					allocation.video = await this.findAvailablePortWithRetry(20000, 5);
-					logger.debug(
-						`Allocated video port ${allocation.video} for ${participant.socketId}`
-					);
-				}
-
-				if (participant.producers.audioProducer) {
-					allocation.audio = await this.findAvailablePortWithRetry(21000, 5);
-					logger.debug(
-						`Allocated audio port ${allocation.audio} for ${participant.socketId}`
-					);
-				}
-
-				portAllocations.set(participant.socketId, allocation);
-			}
-
-			logger.info("Port allocations completed", {
-				allocations: Array.from(portAllocations.entries()).map(
-					([id, ports]) => ({
-						participantId: id,
-						videoPorts: ports.video
-							? `${ports.video}-${ports.video + 1}`
-							: null,
-						audioPorts: ports.audio
-							? `${ports.audio}-${ports.audio + 1}`
-							: null,
-					})
-				),
-			});
-
-			// Generate streams for all participants with pre-allocated ports
-			for (const user of participants) {
-				const ports = portAllocations.get(user.socketId);
-				await this.getParticipantStreamWithPorts(user, ports);
-			}
-
-			// Log what streams were actually created
-			logger.info("Participant streams created", {
-				participantInfo: Array.from(this.participantInfo.entries()).map(
-					([id, info]) => ({
-						id,
-						hasVideoSdp: !!info.videosSdpPath,
-						hasAudioSdp: !!info.audioSdpPath,
-						videoSdpExists: info.videosSdpPath
-							? fs.existsSync(info.videosSdpPath)
-							: false,
-						audioSdpExists: info.audioSdpPath
-							? fs.existsSync(info.audioSdpPath)
-							: false,
-						videoPorts: info.ports?.video,
-						audioPorts: info.ports?.audio,
-						videoIp: info.ips?.video,
-						audioIp: info.ips?.audio,
-					})
-				),
-			});
 
 			// Wait for streams to become stable
 			logger.info("Waiting for streams to stabilize...");
@@ -219,10 +112,13 @@ export class MultiStreamHLSMixer {
 			let inputIndex = 0;
 
 			// Prepare inputs - only add valid SDP files
-			for (const [participantId, participantInfo] of this.participantInfo) {
+			for (const [
+				participantId,
+				participantInfo,
+			] of StreamService.participaintsMap) {
 				if (
 					participantInfo.videosSdpPath &&
-					fs.existsSync(participantInfo.videosSdpPath)
+					(await fileExistsAsync(participantInfo.videosSdpPath))
 				) {
 					ffmpegArgs.push(
 						"-protocol_whitelist",
@@ -249,7 +145,7 @@ export class MultiStreamHLSMixer {
 
 				if (
 					participantInfo.audioSdpPath &&
-					fs.existsSync(participantInfo.audioSdpPath)
+					(await fileExistsAsync(participantInfo.audioSdpPath))
 				) {
 					ffmpegArgs.push(
 						"-protocol_whitelist",
@@ -328,8 +224,8 @@ export class MultiStreamHLSMixer {
 
 			let hls_start_number =
 				(await this.getLastSegmentNumber(playlistPath)) + 1;
-			logger.info(playlistExists);
-			logger.info(hls_start_number);
+			logger.info("Playlist Exist " + playlistExists);
+			logger.info("HLS START NUMBER" + hls_start_number);
 			// Add encoding and output parameters
 			ffmpegArgs.push(
 				// Video encoding
@@ -396,6 +292,9 @@ export class MultiStreamHLSMixer {
 			logger.info("Starting FFmpeg with command", {
 				command: "ffmpeg " + ffmpegArgs.join(" "),
 			});
+			logger.warn(
+				"About to start process counter " + StreamService.HLSStreamStartCounter
+			);
 			let ffmpegStarted = false;
 			const result = await this.startFFmpegProcess(ffmpegArgs);
 			ffmpegStarted = result.success;
@@ -409,7 +308,7 @@ export class MultiStreamHLSMixer {
 		} catch (error) {
 			logger.error("Failed to start FFmpeg stream:", error);
 			this.isRestarting = false;
-			await this.forceCleanup();
+			await this.cleanup();
 			throw error;
 		}
 	}
@@ -418,7 +317,7 @@ export class MultiStreamHLSMixer {
 		ffmpegArgs: string[]
 	): Promise<{ success: boolean; error?: string }> {
 		return new Promise((resolve) => {
-			const ffmpeg = spawn("/opt/homebrew/bin/ffmpeg", ffmpegArgs, {
+			const ffmpeg = spawn("ffmpeg", ffmpegArgs, {
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 
@@ -430,7 +329,7 @@ export class MultiStreamHLSMixer {
 					ffmpeg.kill("SIGTERM");
 					resolve({ success: false, error: "FFmpeg startup timeout" });
 				}
-			}, 10000); // 10 second timeout
+			}, 15000); // 15 second timeout
 
 			ffmpeg.stdout.on("data", (data) => {
 				logger.debug(`FFmpeg stdout: ${data}`);
@@ -512,335 +411,6 @@ export class MultiStreamHLSMixer {
 		});
 	}
 
-	async findAvailablePortWithRetry(
-		startPort: number,
-		maxRetries: number = 5
-	): Promise<number> {
-		let attempts = 0;
-
-		while (attempts < maxRetries) {
-			try {
-				const port = await this.findAvailablePort(startPort + attempts * 100);
-
-				// Double-check the port is actually available by trying to bind to it
-				const isActuallyAvailable = await this.verifyPortAvailable(port);
-				if (isActuallyAvailable) {
-					return port;
-				} else {
-					logger.warn(`Port ${port} verification failed, trying next port`);
-					attempts++;
-				}
-			} catch (error) {
-				logger.warn(`Port allocation attempt ${attempts + 1} failed:`, error);
-				attempts++;
-
-				if (attempts < maxRetries) {
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-				}
-			}
-		}
-
-		throw new Error(
-			`Failed to find available port after ${maxRetries} attempts`
-		);
-	}
-
-	private async verifyPortAvailable(port: number): Promise<boolean> {
-		return new Promise((resolve) => {
-			const server = net.createServer();
-
-			const timeout = setTimeout(() => {
-				server.close();
-				resolve(false);
-			}, 3000);
-
-			server.listen(port, () => {
-				clearTimeout(timeout);
-				server.close(() => {
-					resolve(true);
-				});
-			});
-
-			server.on("error", () => {
-				clearTimeout(timeout);
-				resolve(false);
-			});
-		});
-	}
-
-	async findAvailablePort(startPort: number = 20000): Promise<number> {
-		return new Promise((resolve, reject) => {
-			let attempts = 0;
-			const maxAttempts = 100;
-
-			const testPort = (port: number) => {
-				if (attempts >= maxAttempts) {
-					reject(new Error("No available ports found"));
-					return;
-				}
-
-				// Mark ports as used IMMEDIATELY to prevent race conditions
-				if (this.usedPorts.has(port) || this.usedPorts.has(port + 1)) {
-					testPort(port + 2);
-					return;
-				}
-
-				// Reserve ports before testing
-				this.usedPorts.add(port);
-				this.usedPorts.add(port + 1);
-
-				attempts++;
-				const server = net.createServer();
-
-				server.listen(port, () => {
-					server.close(() => {
-						logger.debug(
-							`Confirmed available port: ${port} (RTCP: ${port + 1})`
-						);
-						resolve(port);
-					});
-				});
-
-				server.on("error", () => {
-					// Remove from used ports if test failed
-					this.usedPorts.delete(port);
-					this.usedPorts.delete(port + 1);
-					testPort(port + 2);
-				});
-			};
-
-			testPort(startPort);
-		});
-	}
-
-	generateSDPForFFmpeg(
-		consumer: mediaSoupTypes.Consumer,
-		mediaType: mediaSoupTypes.MediaKind,
-		port: number,
-		ip: string
-	): string {
-		if (!consumer.rtpParameters.codecs.length) {
-			throw new Error(`No codecs available for ${mediaType} consumer`);
-		}
-
-		const codec = consumer.rtpParameters.codecs[0];
-		const rtcpPort = port + 1;
-
-		let sdp = `v=0\r\n`;
-		sdp += `o=- 0 0 IN IP4 ${ip}\r\n`;
-		sdp += `s=mediasoup\r\n`;
-		sdp += `c=IN IP4 ${ip}\r\n`;
-		sdp += `t=0 0\r\n`;
-
-		if (mediaType === "video") {
-			sdp += `m=video ${port} RTP/AVP ${codec.payloadType}\r\n`;
-			sdp += `a=rtcp:${rtcpPort}\r\n`;
-			sdp += `a=rtpmap:${codec.payloadType} ${codec.mimeType.split("/")[1]}/${
-				codec.clockRate
-			}\r\n`;
-
-			if (codec.parameters) {
-				const fmtp = Object.entries(codec.parameters)
-					.map(([key, value]) => `${key}=${value}`)
-					.join(";");
-				sdp += `a=fmtp:${codec.payloadType} ${fmtp}\r\n`;
-			}
-		} else if (mediaType === "audio") {
-			const channels = codec.channels || 1;
-			sdp += `m=audio ${port} RTP/AVP ${codec.payloadType}\r\n`;
-			sdp += `a=rtcp:${rtcpPort}\r\n`;
-			sdp += `a=rtpmap:${codec.payloadType} ${codec.mimeType.split("/")[1]}/${
-				codec.clockRate
-			}/${channels}\r\n`;
-		}
-
-		sdp += `a=recvonly\r\n`;
-
-		logger.debug(`Generated SDP for ${mediaType} on ${ip}:${port}:`, sdp);
-		return sdp;
-	}
-
-	async getParticipantStreamWithPorts(
-		participant: participant,
-		allocatedPorts?: PortAllocation
-	) {
-		logger.info(`Setting up streams for participant ${participant.socketId}`, {
-			hasVideoProducer: !!participant.producers.videoProducer,
-			hasAudioProducer: !!participant.producers.audioProducer,
-			allocatedPorts,
-		});
-
-		let participantInfoTemp: participantInfo = {
-			id: participant.socketId,
-			layout: participant.position,
-			consumers: {},
-			transports: {},
-			ports: {},
-			ips: {},
-		};
-
-		try {
-			if (participant.producers.videoProducer && allocatedPorts?.video) {
-				logger.info(`Creating video stream for ${participant.socketId}`);
-
-				const videoTransport = await this.getPlainTransport();
-				const ffmpegVideoPort = allocatedPorts.video;
-				const transportIp = videoTransport.tuple.localIp;
-
-				await videoTransport.connect({
-					ip: transportIp,
-					port: ffmpegVideoPort,
-					rtcpPort: ffmpegVideoPort + 1,
-				});
-
-				const videoConsumer = await videoTransport.consume({
-					producerId: participant.producers.videoProducer.id,
-					paused: false,
-					rtpCapabilities: this.router.rtpCapabilities,
-				});
-
-				logger.info(
-					`Video transport connected: MediaSoup -> FFmpeg (${transportIp}:${ffmpegVideoPort})`
-				);
-
-				await videoConsumer.resume();
-
-				// Request keyframes periodically
-				const keyframeInterval = setInterval(async () => {
-					if (!videoConsumer.closed) {
-						try {
-							await videoConsumer.requestKeyFrame();
-						} catch (error) {
-							logger.warn("Failed to request keyframe:", error);
-						}
-					} else {
-						clearInterval(keyframeInterval);
-					}
-				}, 2000);
-
-				participantInfoTemp.consumers.video = videoConsumer;
-				participantInfoTemp.transports.video = videoTransport;
-				participantInfoTemp.ports.video = ffmpegVideoPort;
-				participantInfoTemp.ips.video = transportIp;
-
-				const sdp = this.generateSDPForFFmpeg(
-					videoConsumer,
-					"video",
-					ffmpegVideoPort,
-					transportIp
-				);
-				const videoSdpPath = path.join(
-					this.outputPath,
-					`${participant.socketId}_video.sdp`
-				);
-
-				await fs.promises.writeFile(videoSdpPath, sdp);
-				participantInfoTemp.videosSdpPath = videoSdpPath;
-
-				logger.info(
-					`Video SDP created: ${videoSdpPath} (${transportIp}:${ffmpegVideoPort})`
-				);
-			}
-
-			if (participant.producers.audioProducer && allocatedPorts?.audio) {
-				logger.info(`Creating audio stream for ${participant.socketId}`);
-
-				const audioTransport = await this.getPlainTransport();
-				const ffmpegAudioPort = allocatedPorts.audio;
-				const transportIp = audioTransport.tuple.localIp;
-
-				await audioTransport.connect({
-					ip: transportIp,
-					port: ffmpegAudioPort,
-					rtcpPort: ffmpegAudioPort + 1,
-				});
-
-				const audioConsumer = await audioTransport.consume({
-					producerId: participant.producers.audioProducer.id,
-					paused: false,
-					rtpCapabilities: this.router.rtpCapabilities,
-				});
-
-				logger.info(
-					`Audio transport connected: MediaSoup -> FFmpeg (${transportIp}:${ffmpegAudioPort})`
-				);
-
-				participantInfoTemp.consumers.audio = audioConsumer;
-				participantInfoTemp.transports.audio = audioTransport;
-				participantInfoTemp.ports.audio = ffmpegAudioPort;
-				participantInfoTemp.ips.audio = transportIp;
-				await audioConsumer.resume();
-
-				const audioSDP = this.generateSDPForFFmpeg(
-					audioConsumer,
-					"audio",
-					ffmpegAudioPort,
-					transportIp
-				);
-				const audioSDPpath = path.join(
-					this.outputPath,
-					`${participant.socketId}_audio.sdp`
-				);
-
-				await fs.promises.writeFile(audioSDPpath, audioSDP);
-				participantInfoTemp.audioSdpPath = audioSDPpath;
-
-				logger.info(
-					`Audio SDP created: ${audioSDPpath} (${transportIp}:${ffmpegAudioPort})`
-				);
-			}
-
-			this.participantInfo.set(participant.socketId, participantInfoTemp);
-
-			logger.info(
-				`Successfully set up streams for participant ${participant.socketId}`,
-				{
-					hasVideo: !!participantInfoTemp.videosSdpPath,
-					hasAudio: !!participantInfoTemp.audioSdpPath,
-					videoPorts: participantInfoTemp.ports.video,
-					audioPorts: participantInfoTemp.ports.audio,
-					videoIp: participantInfoTemp.ips.video,
-					audioIp: participantInfoTemp.ips.audio,
-				}
-			);
-		} catch (error) {
-			logger.error(
-				`Failed to setup participant stream for ${participant.socketId}:`,
-				error
-			);
-			// Cleanup partial setup
-			if (participantInfoTemp.consumers.video) {
-				participantInfoTemp.consumers.video.close();
-			}
-			if (participantInfoTemp.consumers.audio) {
-				participantInfoTemp.consumers.audio.close();
-			}
-			if (participantInfoTemp.transports.video) {
-				participantInfoTemp.transports.video.close();
-			}
-			if (participantInfoTemp.transports.audio) {
-				participantInfoTemp.transports.audio.close();
-			}
-
-			// Free up allocated ports on error
-			if (allocatedPorts?.video) {
-				this.usedPorts.delete(allocatedPorts.video);
-				this.usedPorts.delete(allocatedPorts.video + 1);
-			}
-			if (allocatedPorts?.audio) {
-				this.usedPorts.delete(allocatedPorts.audio);
-				this.usedPorts.delete(allocatedPorts.audio + 1);
-			}
-
-			throw error;
-		}
-	}
-
-	// Keep the original method for backward compatibility
-	async getParticipantStream(participant: participant) {
-		return this.getParticipantStreamWithPorts(participant);
-	}
-
 	buildVideoFilter(videoInputs: videoInput[]): string {
 		const { height, width } = this.videoMixConfig;
 
@@ -857,7 +427,7 @@ export class MultiStreamHLSMixer {
 			const { layout, index } = input;
 			const scaledName = `scaled${index}`;
 			filterParts.push(
-				`[${index}:v]scale=${layout.width}:${layout.height}[${scaledName}]`
+				`[${index}:v]scale=${layout?.width}:${layout?.height}[${scaledName}]`
 			);
 			scaledInputs.push({
 				...input,
@@ -875,7 +445,7 @@ export class MultiStreamHLSMixer {
 			const outputLayer =
 				i === scaledInputs.length - 1 ? "mixed_video" : `layer_${i}`;
 			filterParts.push(
-				`[${currentLayer}][${scaledName}]overlay=${layout.x}:${layout.y}[${outputLayer}]`
+				`[${currentLayer}][${scaledName}]overlay=${layout?.x}:${layout?.y}[${outputLayer}]`
 			);
 			currentLayer = outputLayer;
 		});
@@ -899,42 +469,18 @@ export class MultiStreamHLSMixer {
 		}
 	}
 
-	async getPlainTransport() {
-		return await this.router.createPlainTransport(config.plainTransport);
-	}
-
-	async updateParticipants(participants: participant[]) {
-		logger.info("Updating participants, restarting FFmpeg...");
-
-		// Stop current FFmpeg process gracefully
-		await this.stopFFmpeg();
-
-		// Clear old participant info but keep transports alive
-		// for participants that are still present
-		const currentParticipants = new Set(participants.map((p) => p.socketId));
-
-		for (const [id, info] of this.participantInfo) {
-			if (!currentParticipants.has(id)) {
-				this.removeParticipaint(id);
-			}
-		}
-
-		// Start new FFmpeg process
-		await this.generateFFmpegHLSStream(participants);
-	}
-
 	async stopFFmpeg() {
 		if (this.ffmpegProcess && !this.ffmpegProcess.killed) {
 			logger.info("Stopping FFmpeg process...");
 
-			return new Promise<void>((resolve) => {
-				const timeout = setTimeout(() => {
+			return new Promise<void>(async (resolve) => {
+				const timeout = setInterval(() => {
 					if (this.ffmpegProcess && !this.ffmpegProcess.killed) {
-						logger.warn("Force killing FFmpeg process");
-						this.ffmpegProcess.kill("SIGTERM");
+						this.ffmpegProcess.kill("SIGKILL");
 					}
+					logger.info("KILL FFMPEG INTERWAL");
 					resolve();
-				}, 5000); // Increased timeout
+				}, 5000); // 10 Second
 
 				this.ffmpegProcess!.on("close", () => {
 					clearTimeout(timeout);
@@ -943,53 +489,34 @@ export class MultiStreamHLSMixer {
 				});
 				if (this.ffmpegProcess) {
 					this.ffmpegProcess.kill("SIGTERM");
+					//Wait the process to be kill and port to be released
+					await new Promise<void>((resolve) =>
+						setTimeout(() => {
+							resolve();
+						}, 8000)
+					);
 				}
 			});
 		}
 	}
 
-	async forceCleanup() {
-		logger.info("Starting force cleanup process...");
-
-		// Kill FFmpeg process
+	async cleanup() {
+		// Stop process monitoring
 		await this.stopFFmpeg();
 
-		// Kill any existing FFmpeg processes system-wide
-		// await this.killAllFFmpegProcesses();
+		if (this.processMonitorInterval) {
+			clearInterval(this.processMonitorInterval);
+			this.processMonitorInterval = null;
+		}
 
-		// Close all transports and consumers with more thorough cleanup
-		for (const [participantId, participantInfo] of this.participantInfo) {
+		logger.info("Starting  cleanup process...");
+
+		for (const [
+			participantId,
+			participantInfo,
+		] of StreamService.participaintsMap) {
 			try {
-				// Close consumers first
-				if (
-					participantInfo.consumers.video &&
-					!participantInfo.consumers.video.closed
-				) {
-					participantInfo.consumers.video.close();
-				}
-				if (
-					participantInfo.consumers.audio &&
-					!participantInfo.consumers.audio.closed
-				) {
-					participantInfo.consumers.audio.close();
-				}
-
-				// Wait a bit for consumers to close
-				await new Promise((resolve) => setTimeout(resolve, 500));
-
-				// Then close transports
-				if (
-					participantInfo.transports.video &&
-					!participantInfo.transports.video.closed
-				) {
-					participantInfo.transports.video.close();
-				}
-				if (
-					participantInfo.transports.audio &&
-					!participantInfo.transports.audio.closed
-				) {
-					participantInfo.transports.audio.close();
-				}
+				await this.closeParticipaintTransportAndConsumer(participantId);
 
 				logger.debug(`Cleaned up resources for participant ${participantId}`);
 			} catch (error) {
@@ -1001,85 +528,64 @@ export class MultiStreamHLSMixer {
 		}
 
 		// Clear participant info and used ports
-		this.participantInfo.clear();
-		this.usedPorts.clear();
+		StreamService.participaintsMap.clear();
+		PortManager.usedPorts.clear();
 
-		// Clean up SDP files and segments
-		try {
-			if (await fileExistsAsync(this.outputPath)) {
-				const files = await fs.promises.readdir(this.outputPath);
-				files.forEach(async (file) => {
-					if (file.endsWith(".sdp")) {
-						try {
-							await fs.promises.unlink(path.join(this.outputPath, file));
-						} catch (error) {
-							logger.warn(`Failed to delete file ${file}:`, error);
-						}
-					}
-				});
-			}
-		} catch (error) {
-			logger.error("Error cleaning up files:", error);
-		}
+		// Clean up SDP files
+		await this.SDPService.removeSDPFiles();
 
-		logger.info("Force cleanup completed");
-	}
-
-	async cleanup() {
-		// Stop process monitoring
-		if (this.processMonitorInterval) {
-			clearInterval(this.processMonitorInterval);
-			this.processMonitorInterval = null;
-		}
-
-		await this.forceCleanup();
+		logger.info(" cleanup completed");
 	}
 
 	async removeParticipaint(socketId: string) {
-		if (this.participantInfo.has(socketId)) {
-			const data = this.participantInfo.get(socketId);
+		if (StreamService.participaintsMap.has(socketId)) {
+			const data = StreamService.participaintsMap.get(socketId);
 			try {
-				if (data?.consumers.audio && !data.consumers.audio.closed) {
-					data.consumers.audio.close();
-				}
-				if (data?.consumers.video && !data.consumers.video.closed) {
-					data.consumers.video.close();
-				}
-				if (data?.transports.audio && !data.transports.audio.closed) {
-					data.transports.audio.close();
-				}
-				if (data?.transports.video && !data.transports.video.closed) {
-					data.transports.video.close();
-				}
+				this.closeParticipaintTransportAndConsumer(socketId);
 
 				// Free up the ports
 				if (data?.ports?.video) {
-					this.usedPorts.delete(data.ports.video);
-					this.usedPorts.delete(data.ports.video + 1);
+					PortManager.usedPorts.delete(data.ports.video);
+					PortManager.usedPorts.delete(data.ports.video + 1);
 				}
 				if (data?.ports?.audio) {
-					this.usedPorts.delete(data.ports.audio);
-					this.usedPorts.delete(data.ports.audio + 1);
+					PortManager.usedPorts.delete(data.ports.audio);
+					PortManager.usedPorts.delete(data.ports.audio + 1);
 				}
 
 				// Clean up SDP files
-				if (
-					data?.videosSdpPath &&
-					(await fileExistsAsync(data.videosSdpPath))
-				) {
-					await fs.promises.unlink(data.videosSdpPath);
-				}
-				if (data?.audioSdpPath && (await fileExistsAsync(data.audioSdpPath))) {
-					await fs.promises.unlink(data.audioSdpPath);
-				}
+				await this.SDPService.removeSDPFiles(data);
 			} catch (error) {
 				logger.error(`Error removing participant ${socketId}:`, error);
 			}
-			this.participantInfo.delete(socketId);
+			StreamService.participaintsMap.delete(socketId);
+			if (this.ffmpegProcess) {
+				await this.stopFFmpeg(); // Stop so that FFmpeg does not throw error that packet's are not coming
+			}
 			logger.info(`Participant ${socketId} removed`);
 		}
 	}
-	async getLastSegmentNumber(playlistPath: string) {
+
+	private async closeParticipaintTransportAndConsumer(socketId: string) {
+		if (StreamService.participaintsMap.has(socketId)) {
+			const data = StreamService.participaintsMap.get(socketId);
+
+			if (data?.consumers.audio && !data.consumers.audio.closed) {
+				data.consumers.audio.close();
+			}
+			if (data?.consumers.video && !data.consumers.video.closed) {
+				data.consumers.video.close();
+			}
+			if (data?.transports.audio && !data.transports.audio.closed) {
+				data.transports.audio.close();
+			}
+			if (data?.transports.video && !data.transports.video.closed) {
+				data.transports.video.close();
+			}
+		}
+	}
+
+	private async getLastSegmentNumber(playlistPath: string) {
 		try {
 			const { stdout } = await execAsync(
 				`grep -o 'segment_[0-9]*\\.ts' ${playlistPath} | sed 's/[^0-9]//g' | tail -1`

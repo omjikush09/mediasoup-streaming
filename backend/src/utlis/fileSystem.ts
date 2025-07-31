@@ -10,7 +10,6 @@ export async function fileExistsAsync(filePath: string) {
 			return false; // File does not exist
 		}
 		
-        
 		logger.error(`Error checking file ${filePath}:`, error.message);
 		throw error;
 	}

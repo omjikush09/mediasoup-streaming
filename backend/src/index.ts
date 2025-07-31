@@ -20,15 +20,11 @@ app.use(express.json({}));
 app.use(express.urlencoded({ extended: true }));
 
 console.log(path.join(__dirname, config.outputPath));
-app.use((req, res, next) => {
-	logger.info(req.url + " " + req.method + " ");
-	next();
-});
+
 app.use(
 	"/hls",
 	express.static(path.join(__dirname, config.outputPath), {
 		setHeaders(res, filePath) {
-			console.log("📁 Serving file:", filePath);
 			if (filePath.endsWith(".m3u8")) {
 				res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
 				res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -68,6 +64,7 @@ async function startMediasoup() {
 	stream = new StreamService({ router, peers: peerMap });
 	await stream.initailize();
 }
+
 startMediasoup();
 io.on("connection", (socket) => {
 	console.log("CONNECTED");
@@ -75,14 +72,6 @@ io.on("connection", (socket) => {
 	const peer = new Peer(socket.id);
 	peerMap.set(socket.id, peer);
 
-	// if (mediasoupService) {
-	// 	const producers = mediasoupService?.getProducers() || [];
-	// 	logger.info(producers + " producers");
-	// 	if (producers.length > 0) {
-	// 		logger.info("Sending Existing connections");
-	// 		socket.emit("exitingProducers", producers);
-	// 	}
-	// }
 	socket.on("existingProducers", async (callback) => {
 		const producers = mediasoupService?.getProducers() || [];
 		logger.info(producers + " producers");
@@ -188,13 +177,12 @@ io.on("connection", (socket) => {
 				kind: producer.kind,
 				appData: producer.appData,
 			});
-			producer.on("transportclose",async () => {
+			producer.on("transportclose", async () => {
 				console.log(
 					`[${socket.id}] Producer transport closed [producerId:${producer.id}]`
 				);
 				mediasoupService?.removeProducer(producer.id);
 				peer.removeProducer(producer.id);
-				await stream.removeParticipaint(socket.id);
 			});
 			producer.observer.on("close", async () => {
 				console.log(`[${socket.id}] Producer is closed `);
@@ -245,6 +233,7 @@ io.on("connection", (socket) => {
 				console.log(
 					`[${socket.id}] Consumer producer closed [consumerId:${consumer.id}]`
 				);
+				consumer.close();
 				peer.removeConsumer(consumer.id);
 			});
 			logger.info("consume is emited");
@@ -307,9 +296,24 @@ io.on("connection", (socket) => {
 	});
 });
 
-process.on("SIGTERM", () => {
-	stream.killFFmegProcss();
+const close = async () => {
+	logger.warn("STARTING THE CLEANUP");
+	io.close();
+	await stream.cleanup();
+	mediasoupService?.router?.close();
+	mediasoupService?.worker?.close();
+	process.exit(0);
+};
+
+process.on("SIGINT", async () => {
+	await close();
 });
+
+process.on("SIGTERM", async () => {
+	await close();
+});
+
+
 
 const port = Number(process.env.PORT) || 8000;
 
