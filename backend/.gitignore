@@ -1,3 +1,5 @@
 node_modules
 hls_output
 dist
+
+.env

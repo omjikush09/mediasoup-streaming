@@ -1,5 +1,4 @@
 import { types as mediasoupTypes } from "mediasoup";
-
 export const config = {
 	outputPath: "./hls_output",
 	worker: {
@@ -37,14 +36,14 @@ export const config = {
 		listenIps: [
 			{
 				ip: "0.0.0.0",
-				announcedIp: "127.0.0.1",
+				announcedIp: process.env.EXXTERNAL_IP,
 			},
 		],
 		maxIncomingBitrate: 1500000,
 		initialAvailableOutgoingBitrate: 1000000,
 	},
 	plainTransport: {
-		listenIp: { ip: "127.0.0.1", announcedIp: "127.0.0.1" },
+		listenIp: { ip: "0.0.0.0", announcedIp: process.env.EXXTERNAL_IP },
 		rtcpMux: false,
 		comedia: false,
 		enableSrtp: false,

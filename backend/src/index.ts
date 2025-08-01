@@ -10,7 +10,7 @@ import logger from "./utlis/logger";
 import { StreamService } from "./services/streamService";
 import path from "path";
 import { fileURLToPath } from "url";
-
+import "dotenv/config";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename).split("/").slice(0, -1).join("/");
 
@@ -48,7 +48,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
 	cors: {
-		origin: "http://localhost:3000",
+		origin: process.env.CLIENT_URL,
 		methods: ["GET", "POST"],
 		credentials: true,
 	},
@@ -312,8 +312,6 @@ process.on("SIGINT", async () => {
 process.on("SIGTERM", async () => {
 	await close();
 });
-
-
 
 const port = Number(process.env.PORT) || 8000;
 
