@@ -103,7 +103,7 @@ export class MultiStreamHLSMixer {
 
 			// Wait for streams to become stable
 			logger.info("Waiting for streams to stabilize...");
-			await new Promise((resolve) => setTimeout(resolve, 5000)); // Increased wait time
+			// await new Promise((resolve) => setTimeout(resolve, 5000)); // Increased wait time
 
 			let ffmpegArgs: string[] = ["-v", "debug"];
 
@@ -123,8 +123,6 @@ export class MultiStreamHLSMixer {
 					ffmpegArgs.push(
 						"-protocol_whitelist",
 						"file,rtp,udp",
-						"-fflags",
-						"+genpts",
 						"-i",
 						participantInfo.videosSdpPath
 					);
@@ -150,9 +148,6 @@ export class MultiStreamHLSMixer {
 					ffmpegArgs.push(
 						"-protocol_whitelist",
 						"file,rtp,udp",
-						"-fflags",
-						"+genpts",
-						// "-re", // Read input at native frame rate
 						"-i",
 						participantInfo.audioSdpPath
 					);
@@ -222,10 +217,8 @@ export class MultiStreamHLSMixer {
 				? "delete_segments+independent_segments+omit_endlist+append_list+round_durations+discont_start"
 				: "delete_segments+independent_segments+omit_endlist+round_durations+discont_start";
 
-			let hls_start_number =
-				(await this.getLastSegmentNumber(playlistPath)) + 1;
 			logger.info("Playlist Exist " + playlistExists);
-			logger.info("HLS START NUMBER" + hls_start_number);
+
 			// Add encoding and output parameters
 			ffmpegArgs.push(
 				// Video encoding
@@ -275,8 +268,6 @@ export class MultiStreamHLSMixer {
 				this.segmentDuration.toString(),
 				"-hls_list_size",
 				this.playlistSize.toString(),
-				"-start_number",
-				hls_start_number.toString(),
 				"-hls_flags",
 				hlsFlags,
 				"-hls_segment_filename",
@@ -582,19 +573,6 @@ export class MultiStreamHLSMixer {
 			if (data?.transports.video && !data.transports.video.closed) {
 				data.transports.video.close();
 			}
-		}
-	}
-
-	private async getLastSegmentNumber(playlistPath: string) {
-		try {
-			const { stdout } = await execAsync(
-				`grep -o 'segment_[0-9]*\\.ts' ${playlistPath} | sed 's/[^0-9]//g' | tail -1`
-			);
-			const lastSegment = parseInt(stdout.toString().trim(), 10);
-			return isNaN(lastSegment) ? 0 : lastSegment;
-		} catch (err: any) {
-			logger.error("Error reading playlist:", err.message);
-			return 0;
 		}
 	}
 }
