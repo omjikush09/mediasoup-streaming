@@ -9,10 +9,10 @@ import logger from "./utlis/logger";
 import { StreamService } from "./services/streamService";
 import path from "path";
 import { fileURLToPath } from "url";
-import "dotenv/config";
+import dotenv from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename).split("/").slice(0, -1).join("/");
-
+dotenv.config({});
 const app = express();
 app.use(cors());
 app.use(express.json({}));
@@ -110,6 +110,7 @@ io.on("connection", (socket) => {
 				peerMap.get(socket.id)?.transport.delete(transport.id);
 			}
 		});
+		logger.info("ENV " + process.env.EXTERNAL_IP);
 		callback({
 			id: transport?.id,
 			iceParameters: transport?.iceParameters,

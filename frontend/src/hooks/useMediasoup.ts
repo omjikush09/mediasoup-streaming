@@ -65,6 +65,9 @@ export const useMediasoup = ({
 				// Updated reference
 				recvTransportData
 			);
+			recvTransport?.on("icecandidateerror",(error)=>{
+				console.log("ICE CANDIATE ERROR of consumer + "+ error.errorText)
+			})
 			setRecvTransport(recvTransportInstance);
 			console.log(
 				recvTransportInstance?.connectionState +

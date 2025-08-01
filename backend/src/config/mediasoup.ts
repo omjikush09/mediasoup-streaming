@@ -36,14 +36,14 @@ export const config = {
 		listenIps: [
 			{
 				ip: "0.0.0.0",
-				announcedIp: process.env.EXXTERNAL_IP,
+				announcedIp: process.env.EXTERNAL_IP,
 			},
 		],
 		maxIncomingBitrate: 1500000,
 		initialAvailableOutgoingBitrate: 1000000,
 	},
 	plainTransport: {
-		listenIp: { ip: "0.0.0.0", announcedIp: process.env.EXXTERNAL_IP },
+		listenIp: { ip: "0.0.0.0", announcedIp: process.env.EXTERNAL_IP },
 		rtcpMux: false,
 		comedia: false,
 		enableSrtp: false,
