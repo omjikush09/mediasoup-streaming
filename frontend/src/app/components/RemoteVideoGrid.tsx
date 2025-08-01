@@ -43,11 +43,11 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 		const playVideo = async () => {
 			if (videoRef.current && stream) {
 				videoRef.current.srcObject = stream;
-				try {
-					await videoRef.current.play();
-				} catch (error) {
-					console.warn("Video play prevented:", error);
-				}
+				// try {
+				// 	await videoRef.current.play();
+				// } catch (error) {
+				// 	console.warn("Video play prevented:", error);
+				// }
 			}
 		};
 		playVideo();
@@ -68,6 +68,7 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 			className="h-[300] w-[500]"
 			ref={videoRef}
 			controls
+			muted
 		/>
 	);
 };
