@@ -50,10 +50,7 @@ export class MediasoupService {
 		}
 		try {
 			const webRtcServer = await this.worker.createWebRtcServer({
-				listenInfos: [
-					{ protocol: "udp", ip: "127.0.0.1", port: 40000 },
-					{ protocol: "tcp", ip: "127.0.0.1", port: 40000 },
-				],
+				listenInfos: config.webRTCServer.listenInfos,
 			});
 			logger.info("WebRTC server created successfully");
 			return webRtcServer;

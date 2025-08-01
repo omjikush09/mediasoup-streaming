@@ -110,7 +110,12 @@ io.on("connection", (socket) => {
 				peerMap.get(socket.id)?.transport.delete(transport.id);
 			}
 		});
-		logger.info("ENV " + process.env.EXTERNAL_IP);
+		logger.info(
+			"ENV " +
+				process.env.EXTERNAL_IP +
+				" " +
+				config.webRTCServer.listenInfos[0].announcedAddress
+		);
 		logger.info("WEB RTC TRNSPROT data ", {
 			id: transport?.id,
 			iceParameters: transport?.iceParameters,

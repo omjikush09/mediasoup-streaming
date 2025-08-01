@@ -1,4 +1,6 @@
 import { types as mediasoupTypes } from "mediasoup";
+import dotenv from "dotenv";
+dotenv.config();
 export const config = {
 	outputPath: "./hls_output",
 	worker: {
@@ -32,18 +34,27 @@ export const config = {
 			},
 		] as mediasoupTypes.RtpCodecCapability[],
 	},
-	webRtcTransport: {
-		listenIps: [
+	webRTCServer: {
+		listenInfos: [
 			{
+				protocol: "udp",
 				ip: "0.0.0.0",
-				announcedIp: process.env.EXTERNAL_IP,
+				port: 40000,
+				announcedAddress: process.env.EXTERNAL_IP ?? "23.21.6.80",
+			},
+			{
+				protocol: "tcp",
+				ip: "0.0.0.0",
+				port: 40000,
+				announcedAddress: process.env.EXTERNAL_IP ?? "23.21.6.80",
 			},
 		],
-		maxIncomingBitrate: 1500000,
-		initialAvailableOutgoingBitrate: 1000000,
-	},
+	} as mediasoupTypes.WebRtcServerOptions,
 	plainTransport: {
-		listenIp: { ip: "0.0.0.0", announcedIp: process.env.EXTERNAL_IP },
+		listenIp: {
+			ip: "0.0.0.0",
+			// announcedIp: process.env.EXTERNAL_IP ?? "23.21.6.80",
+		},
 		rtcpMux: false,
 		comedia: false,
 		enableSrtp: false,
