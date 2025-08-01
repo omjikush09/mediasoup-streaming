@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { mediasoupService } from "../services/mediasoupClient";
 import { types as mediasoupTypes } from "mediasoup-client";
-import { RemoteStreamData, ProducerInfo } from "../types/mediasoupe";
-import { getSocket, socketEmit } from "@/util/socket";
-
-const socket = getSocket();
+import { RemoteStreamData } from "../types/mediasoupe";
+import { socket, socketEmit } from "@/util/socket";
 
 interface UseRemoteStreamsReturn {
 	remoteStreams: RemoteStreamData[];
@@ -45,9 +43,6 @@ export const useRemoteStreams = ({
 			if (!recvTransport) {
 				console.log("recev Transport not found");
 			}
-			console.log("recv Transport Found");
-			console.log("Existing producers:", producers);
-
 			for (const producerId of producers) {
 				await subscribeToProducer(producerId);
 			}
@@ -55,7 +50,7 @@ export const useRemoteStreams = ({
 		[subscribeToProducer, recvTransport]
 	);
 
-	const getOtherStreams = async () => {
+	const getAllStreams = async () => {
 		console.log("get Other Streams");
 		const producer = await socketEmit<string[]>("existingProducers");
 		handleExitingProducers(producer);
@@ -64,15 +59,15 @@ export const useRemoteStreams = ({
 	useEffect(() => {
 		// socketService.on("exitingProducers", handleExitingProducers);
 
-		socket.on("newProducer", async ({ producerId, kind, appData }) => {
+		socket.on("newProducer", async ({ producerId }) => {
 			await subscribeToProducer(producerId);
 		});
 
 		return () => {
-			socket.off("exitingProducers", handleExitingProducers);
-			socket.off("newProducer", subscribeToProducer);
+			socket.removeAllListeners("exitingProducers");
+			socket.removeAllListeners("newProducer");
 		};
-	}, []);
+	}, [subscribeToProducer]);
 
 	const removeStream = useCallback((consumerId: string): void => {
 		setRemoteStreams((prev) => {
@@ -88,6 +83,6 @@ export const useRemoteStreams = ({
 		remoteStreams,
 		subscribeToProducer,
 		removeStream,
-		getAllStreams: getOtherStreams,
+		getAllStreams,
 	};
 };

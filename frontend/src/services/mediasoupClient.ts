@@ -10,8 +10,6 @@ import {
 } from "../types/mediasoupe";
 import { socketEmit } from "@/util/socket";
 
-type SocketEmitFunction = <T = any>(event: string, data?: any) => Promise<T>;
-
 class MediasoupClientService {
 	private device: mediasoupClient.Device | null = null;
 	private sendTransport: mediasoupClient.types.Transport | null = null;
@@ -97,7 +95,7 @@ class MediasoupClientService {
 
 					callback({ id: response.id });
 				} catch (error) {
-					errback(new Error("Failed to produce media"));
+					errback(new Error("Failed to produce media "+error));
 				}
 			}
 		);
@@ -186,6 +184,9 @@ class MediasoupClientService {
 							kind: response.kind,
 							rtpParameters: response.rtpParameters,
 						});
+						consumer.observer.on("close",()=>{
+							console.log("Consumer close log is called")
+						})
 
 						this.consumers.set(consumer.id, consumer);
 

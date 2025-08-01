@@ -20,16 +20,8 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 				// if (remote.consumer.paused) {
 				await socketEmit("resumeConsumer", { consumerId: remote.id });
 				// }
-
 				const track = remote.consumer.track;
 
-				track.onmute = () => console.warn("Track muted");
-				track.onunmute = () =>
-					console.log("Track unmuted and likely receiving frames");
-
-				track.onended = () => console.warn("Track ended");
-
-				console.log(track.kind);
 				if (
 					track.kind === "video" ||
 					(track.kind === "audio" &&
@@ -48,15 +40,17 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 	}, [remoteStreams]);
 
 	useEffect(() => {
-		if (videoRef.current && stream) {
-			videoRef.current.srcObject = stream;
-			const playPromise = videoRef.current.play();
-			if (playPromise !== undefined) {
-				playPromise.catch((error) => {
+		const playVideo = async () => {
+			if (videoRef.current && stream) {
+				videoRef.current.srcObject = stream;
+				try {
+					await videoRef.current.play();
+				} catch (error) {
 					console.warn("Video play prevented:", error);
-				});
+				}
 			}
-		}
+		};
+		playVideo();
 	}, [stream]);
 
 	if (!remoteStreams || remoteStreams.length < 2) {
@@ -74,7 +68,6 @@ const RemoteVideoGrid: React.FC<RemoteVideoGridProps> = ({ remoteStreams }) => {
 			className="h-[300] w-[500]"
 			ref={videoRef}
 			controls
-			// only if needed
 		/>
 	);
 };

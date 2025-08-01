@@ -1,6 +1,12 @@
 "use client";
 
-import VideoPlayer from "../components/VideoPlayer";
+import dynamic from "next/dynamic";
+
+const VideoPlayer = dynamic(() => import("../components/VideoPlayer"), {
+	ssr: false,
+	loading: () => <p>Loading video player...</p>,
+});
+
 const Watch = () => {
 	return (
 		<>

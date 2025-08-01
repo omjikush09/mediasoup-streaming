@@ -1,34 +1,23 @@
 import { io, Socket } from "socket.io-client";
 import { SERVER_URL } from "./config";
 
-let socket: Socket | null = null;
+export const socket: Socket = io(SERVER_URL, {
+	transports: ["websocket"],
+	withCredentials: true,
+});
 
-export const getSocket = (): Socket => {
-	if (!socket) {
-		socket = io(SERVER_URL, {
-			transports: ["websocket"],
-			withCredentials: true,
-		});
-	}
-	return socket;
-};
-
-export const socketEmit = <T = any>(
-	event: string,
-	data?: any,
-	callback?: Function
-): Promise<T> => {
+export const socketEmit = <T = any>(event: string, data?: any): Promise<T> => {
 	console.log("Emitting event:", event, "with data:", data);
-	let socket = getSocket();
+
 	if (data != undefined) {
 		return new Promise((resolve, reject) => {
 			socket.emit(event, data, (response: any) => {
 				if (response && response.error) {
 					reject(new Error(response.error));
 				} else {
-					if (callback) {
-						callback(response);
-					}
+					// if (callback) {
+					// 	callback(response);
+					// }
 					resolve(response);
 				}
 			});
@@ -40,9 +29,9 @@ export const socketEmit = <T = any>(
 				if (response && response.error) {
 					reject(new Error(response.error));
 				} else {
-					if (callback) {
-						callback(response);
-					}
+					// if (callback) {
+					// 	callback(response);
+					// }
 					resolve(response);
 				}
 			});

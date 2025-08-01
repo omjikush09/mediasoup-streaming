@@ -4,7 +4,6 @@ import CameraStream from "../components/Camera";
 import RemoteVideoGrid from "../components/RemoteVideoGrid";
 import { useMediasoup } from "../../hooks/useMediasoup";
 import { useRemoteStreams } from "../../hooks/useRemoteStreams";
-import { SERVER_URL } from "../../util/config";
 
 const Home: React.FC = () => {
 	const {
@@ -14,7 +13,7 @@ const Home: React.FC = () => {
 		sendTransport,
 		recvTransport,
 		initialize,
-	} = useMediasoup(SERVER_URL);
+	} = useMediasoup();
 
 	const { remoteStreams, getAllStreams } = useRemoteStreams({
 		recvTransport,
@@ -30,7 +29,7 @@ const Home: React.FC = () => {
 				getAllStreams();
 			}, 1000);
 		}
-	}, [isConnected]);
+	}, [isConnected, getAllStreams]);
 
 	if (error) {
 		return (

@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import * as mediasoupClient from "mediasoup-client";
 import { mediasoupService } from "../services/mediasoupClient"; // Updated import
 import { WebRTCTransportData } from "../types/mediasoupe";
-import { getSocket, socketEmit } from "@/util/socket";
+import { socket, socketEmit } from "@/util/socket";
 
-const socket = getSocket();
 interface UseMediasoupReturn {
 	isConnected: boolean;
 	isInitializing: boolean;
@@ -15,7 +14,7 @@ interface UseMediasoupReturn {
 	disconnect: () => void;
 }
 
-export const useMediasoup = (serverUrl: string): UseMediasoupReturn => {
+export const useMediasoup = (): UseMediasoupReturn => {
 	const [isConnected, setIsConnected] = useState<boolean>(false);
 	const [isInitializing, setIsInitializing] = useState<boolean>(false);
 	const [error, setError] = useState<string | null>(null);
@@ -38,7 +37,7 @@ export const useMediasoup = (serverUrl: string): UseMediasoupReturn => {
 				);
 			console.log(rtpCapabilities + " Router ");
 			// Initialize mediasoup device
-			await mediasoupService.initialize(rtpCapabilities); // Updated reference
+			await mediasoupService.initialize(rtpCapabilities);
 
 			// Create WebRTC transports
 			const sendTransportData = await socketEmit<WebRTCTransportData>(
@@ -79,21 +78,17 @@ export const useMediasoup = (serverUrl: string): UseMediasoupReturn => {
 		} finally {
 			setIsInitializing(false);
 		}
-	}, [serverUrl, isInitializing, isConnected]);
+	}, [isInitializing, isConnected]);
 
 	const disconnect = useCallback((): void => {
-		mediasoupService.close(); // Updated reference
-		socket.disconnect();
-		setIsConnected(false);
-		setSendTransport(null);
-		setRecvTransport(null);
+		if (socket) {
+			mediasoupService.close();
+			socket.disconnect();
+			setIsConnected(false);
+			setSendTransport(null);
+			setRecvTransport(null);
+		}
 	}, []);
-
-	useEffect(() => {
-		return () => {
-			disconnect();
-		};
-	}, [disconnect]);
 
 	return {
 		isConnected,
