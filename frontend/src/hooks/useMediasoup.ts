@@ -2,7 +2,8 @@ import { useState, useCallback } from "react";
 import * as mediasoupClient from "mediasoup-client";
 import { mediasoupService } from "../services/mediasoupClient"; // Updated import
 import { WebRTCTransportData } from "../types/mediasoupe";
-import { socket, socketEmit } from "@/util/socket";
+import { socketEmit } from "@/util/socket";
+import { Socket } from "socket.io-client";
 
 interface UseMediasoupReturn {
 	isConnected: boolean;
@@ -14,7 +15,11 @@ interface UseMediasoupReturn {
 	disconnect: () => void;
 }
 
-export const useMediasoup = (): UseMediasoupReturn => {
+export const useMediasoup = ({
+	socket,
+}: {
+	socket: Socket;
+}): UseMediasoupReturn => {
 	const [isConnected, setIsConnected] = useState<boolean>(false);
 	const [isInitializing, setIsInitializing] = useState<boolean>(false);
 	const [error, setError] = useState<string | null>(null);
@@ -88,7 +93,7 @@ export const useMediasoup = (): UseMediasoupReturn => {
 			setSendTransport(null);
 			setRecvTransport(null);
 		}
-	}, []);
+	}, [socket]);
 
 	return {
 		isConnected,

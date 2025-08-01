@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { mediasoupService } from "../services/mediasoupClient";
 import { types as mediasoupTypes } from "mediasoup-client";
 import { RemoteStreamData } from "../types/mediasoupe";
-import { socket, socketEmit } from "@/util/socket";
+import { socketEmit } from "@/util/socket";
+import { Socket } from "socket.io-client";
 
 interface UseRemoteStreamsReturn {
 	remoteStreams: RemoteStreamData[];
@@ -12,8 +13,10 @@ interface UseRemoteStreamsReturn {
 }
 
 export const useRemoteStreams = ({
+	socket,
 	recvTransport,
 }: {
+	socket: Socket;
 	recvTransport: mediasoupTypes.Transport | null;
 }): UseRemoteStreamsReturn => {
 	const [remoteStreams, setRemoteStreams] = useState<RemoteStreamData[]>([]);
@@ -50,7 +53,7 @@ export const useRemoteStreams = ({
 		[subscribeToProducer, recvTransport]
 	);
 
-	const getAllStreams = async () => {
+	const getOtherStreams = async () => {
 		console.log("get Other Streams");
 		const producer = await socketEmit<string[]>("existingProducers");
 		handleExitingProducers(producer);
@@ -64,10 +67,10 @@ export const useRemoteStreams = ({
 		});
 
 		return () => {
-			socket.removeAllListeners("exitingProducers");
-			socket.removeAllListeners("newProducer");
+			socket.off("exitingProducers", handleExitingProducers);
+			socket.off("newProducer", subscribeToProducer);
 		};
-	}, [subscribeToProducer]);
+	}, []);
 
 	const removeStream = useCallback((consumerId: string): void => {
 		setRemoteStreams((prev) => {
@@ -83,6 +86,6 @@ export const useRemoteStreams = ({
 		remoteStreams,
 		subscribeToProducer,
 		removeStream,
-		getAllStreams,
+		getAllStreams: getOtherStreams,
 	};
 };
