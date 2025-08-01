@@ -48,35 +48,8 @@ export class MultiStreamHLSMixer {
 
 		this.ffmpegProcess = null;
 		this.ensureDirectoryExists();
-		this.startProcessMonitoring();
+		// this.startProcessMonitoring();
 		this.SDPService = new SDPService(router);
-	}
-
-	private startProcessMonitoring() {
-		// Monitor for orphaned FFmpeg processes every 30 seconds
-		this.processMonitorInterval = setInterval(() => {
-			this.checkForOrphanedProcesses();
-		}, 30000);
-	}
-
-	private async checkForOrphanedProcesses() {
-		try {
-			const { stdout } = await execAsync('pgrep -f "ffmpeg.*hls_output"');
-			const processes = stdout.trim().split("\n").filter(Boolean);
-
-			if (
-				processes.length > 1 ||
-				(processes.length === 1 && !this.ffmpegProcess)
-			) {
-				logger.warn(
-					`Found ${processes.length} FFmpeg processes, cleaning up orphans`
-				);
-				await execAsync('pkill -f "ffmpeg.*hls_output"');
-				await new Promise((resolve) => setTimeout(resolve, 2000));
-			}
-		} catch (error) {
-			// No processes found or error - this is usually fine
-		}
 	}
 
 	async generateFFmpegHLSStream(

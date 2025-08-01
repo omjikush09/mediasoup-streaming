@@ -2,7 +2,6 @@ import express from "express";
 import { Server } from "socket.io";
 import http from "http";
 import cors from "cors";
-import { types as mediasoupTypes } from "mediasoup";
 import { config } from "./config/mediasoup";
 import { MediasoupService } from "./services/mediasoupService";
 import { Peer } from "./lib/peer";
