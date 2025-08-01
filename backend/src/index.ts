@@ -111,6 +111,12 @@ io.on("connection", (socket) => {
 			}
 		});
 		logger.info("ENV " + process.env.EXTERNAL_IP);
+		logger.info("WEB RTC TRNSPROT data ", {
+			id: transport?.id,
+			iceParameters: transport?.iceParameters,
+			iceCandidates: transport?.iceCandidates,
+			dtlsParameters: transport?.dtlsParameters,
+		});
 		callback({
 			id: transport?.id,
 			iceParameters: transport?.iceParameters,
