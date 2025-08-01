@@ -296,13 +296,13 @@ export class MultiStreamHLSMixer {
 			}, 15000); // 15 second timeout
 
 			ffmpeg.stdout.on("data", (data) => {
-				logger.info(`FFmpeg stdout: ${data}`);
+				logger.debug(`FFmpeg stdout: ${data}`);
 			});
 
 			ffmpeg.stderr.on("data", (data) => {
 				const errorStr = data.toString();
 				errorOutput += errorStr;
-				logger.error(data.toString());
+				// logger.error(data.toString());
 
 				// Check if FFmpeg has started successfully
 				if (
