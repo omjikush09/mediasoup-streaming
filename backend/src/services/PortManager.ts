@@ -1,6 +1,6 @@
 import * as net from "net";
-import logger from "../utlis/logger";
-import { StreamService } from "./streamService";
+import logger from "../utlis/logger.js";
+import { StreamService } from "./streamService.js";
 
 export class PortManager {
 	static usedPorts: Set<number> = new Set();

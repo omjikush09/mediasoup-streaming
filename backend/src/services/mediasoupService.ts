@@ -1,8 +1,8 @@
 import { types as mediasoupTypes, createWorker } from "mediasoup";
 
-import { config } from "../config/mediasoup";
-import { StreamService } from "./streamService";
-import logger from "../utlis/logger";
+import { config } from "../config/mediasoup.js";
+import { StreamService } from "./streamService.js";
+import logger from "../utlis/logger.js";
 
 export class MediasoupService {
 	worker: mediasoupTypes.Worker | null;

@@ -2,13 +2,13 @@ import { types as mediaSoupTypes } from "mediasoup";
 import path from "path";
 import * as fs from "fs";
 import { ChildProcess, exec, spawn } from "child_process";
-import logger from "../utlis/logger";
+import logger from "../utlis/logger.js";
 import { promisify } from "node:util";
-import { fileExistsAsync } from "../utlis/fileSystem";
-import { PortManager } from "./PortManager";
-import { participantInfo, StreamService } from "./streamService";
-import { SDPService } from "./SDPService";
-import { config } from "../config/mediasoup";
+import { fileExistsAsync } from "../utlis/fileSystem.js";
+import { PortManager } from "./PortManager.js";
+import { participantInfo, StreamService } from "./streamService.js";
+import { SDPService } from "./SDPService.js";
+import { config } from "../config/mediasoup.js";
 
 const execAsync = promisify(exec);
 

@@ -1,7 +1,7 @@
 import { types as mediasoupTypes } from "mediasoup";
-import { Peer } from "../lib/peer";
-import { MultiStreamHLSMixer } from "./multiStreamHLSMixer";
-import logger from "../utlis/logger";
+import { Peer } from "../lib/peer.js";
+import { MultiStreamHLSMixer } from "./multiStreamHLSMixer.js";
+import logger from "../utlis/logger.js";
 
 export class StreamService {
 	router: mediasoupTypes.Router;

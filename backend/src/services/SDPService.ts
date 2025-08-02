@@ -1,11 +1,11 @@
-import logger from "../utlis/logger";
+import logger from "../utlis/logger.js";
 import { types as mediaSoupTypes } from "mediasoup";
 import fs from "fs";
 import path from "path";
-import { participantInfo, StreamService } from "./streamService";
-import { PortManager } from "./PortManager";
-import { config } from "./../config/mediasoup";
-import { fileExistsAsync } from "../utlis/fileSystem";
+import { participantInfo, StreamService } from "./streamService.js";
+import { PortManager } from "./PortManager.js";
+import { config } from "./../config/mediasoup.js";
+import { fileExistsAsync } from "../utlis/fileSystem.js";
 
 export class SDPService {
 	private router: mediaSoupTypes.Router;

@@ -1,5 +1,5 @@
 import { access, constants } from "fs/promises";
-import logger from "./logger";
+import logger from "./logger.js";
 
 export async function fileExistsAsync(filePath: string) {
 	try {
