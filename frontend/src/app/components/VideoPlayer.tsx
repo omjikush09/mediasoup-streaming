@@ -21,7 +21,7 @@ const VideoPlayer = () => {
 					liveSyncDurationCount: 3,
 					maxBufferLength: 30,
 					lowLatencyMode: true,
-					minBufferLength: 3,
+					minBufferLength: 5,
 				}}
 			/>
 		</>
